@@ -24,35 +24,142 @@
       color: white;
     }
     #controls {
-      font-family: Arial, sans-serif;
-      font-size: 14px;
+      font-family: 'Times New Roman', serif;
+      font-size: 12px;
+      /* border: 2px solid #9b7023; */
+      background: linear-gradient(to bottom, rgba(0,0,0,0.9), rgba(20,10,0,0.9));
+      box-shadow: 0 0 20px rgba(255,180,0,0.2);
+      border-radius: 8px;
+      padding: 8px;
+      color: #ffd700;
+      position: absolute;
+      top: 20px;
+      left: 20px;
     }
     #controls div {
-      margin: 10px 0;
-    }
-    #controls input[type="range"] {
-      width: 150px;
-      margin-top: 5px;
+      margin: 5px 0;
+      position: relative;
     }
     #controls label {
       display: block;
+      margin-bottom: 2px;
+      text-shadow: 0 0 5px #ffd700;
+      font-size: 12px;
+    }
+    #controls input[type="range"] {
+      -webkit-appearance: none;
+      width: 120px;
+      height: 8px;
+      background: linear-gradient(to right, #3a2b15, #5c4423);
+      border: 1px solid #9b7023;
+      border-radius: 4px;
+      margin-top: 2px;
+    }
+    #controls input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      background: radial-gradient(#ffd700, #b8860b);
+      border: 1px solid #9b7023;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(255,215,0,0.2);
+    }
+    #controls input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      background: radial-gradient(#ffd700, #b8860b);
+      border: 1px solid #9b7023;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(255,215,0,0.2);
+    }
+    #controls span {
+      color: #ffd700;
+      text-shadow: 0 0 3px #ffd700;
+    }
+    #leaderboard {
+      font-family: 'Times New Roman', serif;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: linear-gradient(to bottom, rgba(0,0,0,0.95), rgba(20,10,0,0.95));
+      box-shadow: 0 0 30px rgba(255,180,0,0.3);
+      border-radius: 12px;
+      padding: 20px;
+      color: #ffd700;
+      display: none;
+      text-align: center;
+      min-width: 300px;
+    }
+
+    #leaderboard h2 {
+      margin: 0 0 20px 0;
+      font-size: 24px;
+      text-shadow: 0 0 10px #ffd700;
+    }
+
+    .leaderboard-entry {
+      display: flex;
+      justify-content: space-between;
+      margin: 8px 0;
+      padding: 5px 10px;
+      border-radius: 4px;
+    }
+
+    .leaderboard-entry:nth-child(even) {
+      background: rgba(155, 112, 35, 0.2);
+    }
+
+    .name-input {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid #9b7023;
+      color: #ffd700;
+      padding: 5px 10px;
+      border-radius: 4px;
+      margin-top: 10px;
+      font-family: 'Times New Roman', serif;
+    }
+
+    .submit-button {
+      background: linear-gradient(to bottom, #9b7023, #5c4423);
+      border: 1px solid #9b7023;
+      color: #ffd700;
+      padding: 5px 15px;
+      border-radius: 4px;
+      margin-top: 10px;
+      cursor: pointer;
+      font-family: 'Times New Roman', serif;
+    }
+
+    .submit-button:hover {
+      background: linear-gradient(to bottom, #b8860b, #9b7023);
     }
   </style>
 </head>
 <body>
   <div id="score">Score: 0</div>
-  <div id="controls" style="position: absolute; top: 20px; left: 20px; color: white; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px;">
+  <div id="controls">
     <div>
-      <label for="horizontalSpeed">Horizontal Speed: <span id="horizontalSpeedValue">1</span></label>
+      <label for="horizontalSpeed">✧ Horizontal Speed: <span id="horizontalSpeedValue">1</span></label>
       <input type="range" id="horizontalSpeed" min="0" max="3" step="0.1" value="1">
     </div>
     <div>
-      <label for="verticalSpeed">Vertical Speed: <span id="verticalSpeedValue">12</span></label>
+      <label for="verticalSpeed">✧ Vertical Speed: <span id="verticalSpeedValue">12</span></label>
       <input type="range" id="verticalSpeed" min="5" max="15" step="0.5" value="12">
     </div>
     <div>
-      <label for="gravity">Gravity: <span id="gravityValue">0.15</span></label>
+      <label for="gravity">✧ Gravity: <span id="gravityValue">0.15</span></label>
       <input type="range" id="gravity" min="0.05" max="0.3" step="0.01" value="0.15">
+    </div>
+  </div>
+  <div id="leaderboard">
+    <h2>✧ High Scores ✧</h2>
+    <div id="scores-list"></div>
+    <div id="new-score-input" style="display: none;">
+      <input type="text" class="name-input" id="player-name" maxlength="15" placeholder="Enter your name">
+      <button class="submit-button" onclick="submitScore()">Submit</button>
     </div>
   </div>
   <script>
@@ -83,10 +190,14 @@
       gravity: 0.15
     };
     
+    let highScores = [];
+    const MAX_HIGH_SCORES = 10;
+    
     function setup() {
       createCanvas(windowWidth, windowHeight);
       updateScore(0);
       setupControls();
+      loadHighScores();
     }
     
     function draw() {
@@ -137,18 +248,20 @@
       
       // Draw game state
       if (gameOver) {
-        textSize(48);
+        textSize(24);
         fill(255);
         textAlign(CENTER, CENTER);
+        textFont('Cinzel');
+        text("Click to view high scores", width/2, height/2 - 50);
+        
+        textSize(48);
         text("GAME OVER", width/2, height/2);
-        textSize(24);
-        text("Click to restart", width/2, height/2 + 50);
       } else {
-        // Draw misses
-        fill(255, 0, 0);
-        textSize(18);
-        textAlign(LEFT, TOP);
-        text(`Misses: ${missedShells}/${maxMisses}`, 20, 20);
+        // // Draw misses
+        // fill(255, 0, 0);
+        // textSize(18);
+        // textAlign(LEFT, TOP);
+        // text(`Misses: ${missedShells}/${maxMisses}`, 20, 20);
       }
     }
 
@@ -179,14 +292,30 @@
     
     function mousePressed() {
       if (gameOver) {
-        // Restart game
-        shells = [];
-        explosions = [];
-        slices = [];
-        score = 0;
-        updateScore(0);
-        missedShells = 0;
-        gameOver = false;
+        const leaderboard = document.getElementById('leaderboard');
+        if (leaderboard.style.display === 'none' || leaderboard.style.display === '') {
+          // First click after game over - show leaderboard
+          if (checkHighScore(score)) {
+            displayLeaderboard(score);
+          } else {
+            displayLeaderboard();
+          }
+        } else {
+          // Only restart game if we click while viewing leaderboard
+          // and not entering a new high score
+          const newScoreInput = document.getElementById('new-score-input');
+          if (newScoreInput.style.display === 'none') {
+            leaderboard.style.display = 'none';
+            // Reset game
+            shells = [];
+            explosions = [];
+            slices = [];
+            score = 0;
+            updateScore(0);
+            missedShells = 0;
+            gameOver = false;
+          }
+        }
       }
     }
     
@@ -374,6 +503,63 @@
     
     function windowResized() {
       resizeCanvas(windowWidth, windowHeight);
+    }
+
+    function loadHighScores() {
+      const savedScores = localStorage.getItem('fireworkNinjaScores');
+      highScores = savedScores ? JSON.parse(savedScores) : [];
+    }
+
+    function saveHighScores() {
+      localStorage.setItem('fireworkNinjaScores', JSON.stringify(highScores));
+    }
+
+    function checkHighScore(score) {
+      const lowestScore = highScores.length < MAX_HIGH_SCORES ? 0 : 
+                         highScores[highScores.length - 1]?.score || 0;
+      return score > lowestScore || highScores.length < MAX_HIGH_SCORES;
+    }
+
+    function displayLeaderboard(newScore = null) {
+      const leaderboard = document.getElementById('leaderboard');
+      const scoresList = document.getElementById('scores-list');
+      const newScoreInput = document.getElementById('new-score-input');
+      
+      scoresList.innerHTML = '';
+      highScores.sort((a, b) => b.score - a.score);
+
+      highScores.forEach((entry, index) => {
+        const div = document.createElement('div');
+        div.className = 'leaderboard-entry';
+        div.innerHTML = `
+          <span>${index + 1}. ${entry.name}</span>
+          <span>${entry.score}</span>
+        `;
+        scoresList.appendChild(div);
+      });
+
+      if (newScore !== null && checkHighScore(newScore)) {
+        newScoreInput.style.display = 'block';
+      } else {
+        newScoreInput.style.display = 'none';
+      }
+
+      leaderboard.style.display = 'block';
+    }
+
+    function submitScore() {
+      const nameInput = document.getElementById('player-name');
+      const name = nameInput.value.trim() || 'Anonymous';
+      
+      highScores.push({ name, score });
+      highScores.sort((a, b) => b.score - a.score);
+      if (highScores.length > MAX_HIGH_SCORES) {
+        highScores.length = MAX_HIGH_SCORES;
+      }
+      
+      saveHighScores();
+      document.getElementById('new-score-input').style.display = 'none';
+      displayLeaderboard();
     }
   </script>
 </body>
