@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Firework Ninja</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.1/p5.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+    }
+    canvas {
+      display: block;
+    }
+    #score {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      font-family: Arial, sans-serif;
+      font-size: 24px;
+      color: white;
+    }
+    #controls {
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+    }
+    #controls div {
+      margin: 10px 0;
+    }
+    #controls input[type="range"] {
+      width: 150px;
+      margin-top: 5px;
+    }
+    #controls label {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div id="score">Score: 0</div>
+  <div id="controls" style="position: absolute; top: 20px; left: 20px; color: white; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px;">
+    <div>
+      <label for="horizontalSpeed">Horizontal Speed: <span id="horizontalSpeedValue">1</span></label>
+      <input type="range" id="horizontalSpeed" min="0" max="3" step="0.1" value="1">
+    </div>
+    <div>
+      <label for="verticalSpeed">Vertical Speed: <span id="verticalSpeedValue">12</span></label>
+      <input type="range" id="verticalSpeed" min="5" max="15" step="0.5" value="12">
+    </div>
+    <div>
+      <label for="gravity">Gravity: <span id="gravityValue">0.15</span></label>
+      <input type="range" id="gravity" min="0.05" max="0.3" step="0.01" value="0.15">
+    </div>
+  </div>
+  <script>
+    let shells = [];
+    let explosions = [];
+    let score = 0;
+    let slices = [];
+    let sliceTimeout = 0;
+    let gameOver = false;
+    let missedShells = 0;
+    let maxMisses = 5;
+    
+    // Shell colors
+    const colors = [
+      [255, 50, 50],   // Red
+      [50, 255, 50],   // Green
+      [50, 50, 255],   // Blue
+      [255, 255, 50],  // Yellow
+      [255, 50, 255],  // Magenta
+      [50, 255, 255],  // Cyan
+      [255, 150, 50],  // Orange
+    ];
+    
+    // Add these variables at the top with other global variables
+    let shellSettings = {
+      minVx: -1,
+      maxVx: 1,
+      minVy: -12,
+      maxVy: -9,
+      gravity: 0.15
+    };
+    
+    function setup() {
+      createCanvas(windowWidth, windowHeight);
+      updateScore(0);
+      setupControls();
+    }
+    
+    function draw() {
+      background(0, 0, 0, 40);
+      
+      // Spawn new shells
+      if (random() < 0.03 && shells.length < 10 && !gameOver) {
+        createShell();
+      }
+      
+      // Update and draw shells
+      for (let i = shells.length - 1; i >= 0; i--) {
+        shells[i].update();
+        shells[i].display();
+        
+        // Remove shells that go off-screen
+        if (shells[i].y > height + 50 && !shells[i].exploded) {
+          missedShells++;
+          shells.splice(i, 1);
+          
+          if (missedShells >= maxMisses) {
+            gameOver = true;
+          }
+        }
+      }
+      
+      // Update and draw explosions
+      for (let i = explosions.length - 1; i >= 0; i--) {
+        explosions[i].update();
+        explosions[i].display();
+        
+        if (explosions[i].particles[0].lifespan <= 0) {
+          explosions.splice(i, 1);
+        }
+      }
+      
+      // Draw slices
+      for (let i = slices.length - 1; i >= 0; i--) {
+        stroke(255, 255, 255, slices[i].alpha);
+        strokeWeight(3);
+        line(slices[i].x1, slices[i].y1, slices[i].x2, slices[i].y2);
+        slices[i].alpha -= 10;
+        
+        if (slices[i].alpha <= 0) {
+          slices.splice(i, 1);
+        }
+      }
+      
+      // Draw game state
+      if (gameOver) {
+        textSize(48);
+        fill(255);
+        textAlign(CENTER, CENTER);
+        text("GAME OVER", width/2, height/2);
+        textSize(24);
+        text("Click to restart", width/2, height/2 + 50);
+      } else {
+        // Draw misses
+        fill(255, 0, 0);
+        textSize(18);
+        textAlign(LEFT, TOP);
+        text(`Misses: ${missedShells}/${maxMisses}`, 20, 20);
+      }
+    }
+
+    function mouseDragged() {
+      if (gameOver) return;
+      
+      // Create slice effect
+      slices.push({
+        x1: pmouseX,
+        y1: pmouseY,
+        x2: mouseX,
+        y2: mouseY,
+        alpha: 255
+      });
+      
+      // Check for collision with shells
+      for (let i = shells.length - 1; i >= 0; i--) {
+        if (!shells[i].exploded && lineCircleCollision(pmouseX, pmouseY, mouseX, mouseY, shells[i].x, shells[i].y, shells[i].radius)) {
+          // Explode the shell
+          createExplosion(shells[i].x, shells[i].y, shells[i].color);
+          updateScore(score + 10);
+          shells[i].exploded = true;
+          shells.splice(i, 1);
+        }
+      }
+      return false; // Prevent default
+    }
+    
+    function mousePressed() {
+      if (gameOver) {
+        // Restart game
+        shells = [];
+        explosions = [];
+        slices = [];
+        score = 0;
+        updateScore(0);
+        missedShells = 0;
+        gameOver = false;
+      }
+    }
+    
+    function createShell() {
+      let shell = {
+        x: random(width * 0.1, width * 0.9),
+        y: height + 20,
+        vx: random(-shellSettings.maxVx, shellSettings.maxVx),
+        vy: random(-shellSettings.maxVy, -shellSettings.maxVy * 0.75),
+        gravity: shellSettings.gravity,
+        radius: random(15, 25),
+        color: random(colors),
+        exploded: false,
+        
+        update: function() {
+          this.vy += this.gravity;
+          this.x += this.vx;
+          this.y += this.vy;
+          
+          // Bounce off walls
+          if (this.x < this.radius || this.x > width - this.radius) {
+            this.vx *= -0.8;
+          }
+        },
+        
+        display: function() {
+          fill(this.color);
+          noStroke();
+          
+          // Draw shell
+          circle(this.x, this.y, this.radius * 2);
+          
+          // Draw fuse
+          stroke(200, 150, 100);
+          strokeWeight(3);
+          let fuseLength = this.radius * 1.5;
+          let angle = atan2(this.vy, this.vx) + PI/2;
+          line(this.x, this.y, 
+               this.x + cos(angle) * fuseLength,
+               this.y + sin(angle) * fuseLength);
+               
+          // Draw spark at end of fuse
+          if (frameCount % 4 < 2) {
+            fill(255, 200, 50);
+            noStroke();
+            circle(
+              this.x + cos(angle) * fuseLength,
+              this.y + sin(angle) * fuseLength,
+              4
+            );
+          }
+        }
+      };
+      
+      shells.push(shell);
+    }
+    
+    function createExplosion(x, y, shellColor) {
+      let explosion = {
+        x: x,
+        y: y,
+        particles: [],
+        
+        update: function() {
+          for (let i = 0; i < this.particles.length; i++) {
+            this.particles[i].update();
+          }
+        },
+        
+        display: function() {
+          for (let i = 0; i < this.particles.length; i++) {
+            this.particles[i].display();
+          }
+        }
+      };
+      
+      // Create particles
+      for (let i = 0; i < 80; i++) {
+        let angle = random(TWO_PI);
+        let speed = random(2, 8);
+        let size = random(2, 5);
+        
+        explosion.particles.push({
+          x: x,
+          y: y,
+          vx: cos(angle) * speed,
+          vy: sin(angle) * speed,
+          size: size,
+          color: shellColor,
+          lifespan: 255,
+          
+          update: function() {
+            this.x += this.vx;
+            this.vy += 0.1; // Gravity
+            this.y += this.vy;
+            this.lifespan -= 5;
+          },
+          
+          display: function() {
+            if (this.lifespan > 0) {
+              noStroke();
+              fill(this.color[0], this.color[1], this.color[2], this.lifespan);
+              circle(this.x, this.y, this.size);
+            }
+          }
+        });
+      }
+      
+      explosions.push(explosion);
+    }
+    
+    function lineCircleCollision(x1, y1, x2, y2, cx, cy, r) {
+      // Check if either endpoint is inside the circle
+      let inside1 = pointCircleCollision(x1, y1, cx, cy, r);
+      let inside2 = pointCircleCollision(x2, y2, cx, cy, r);
+      if (inside1 || inside2) return true;
+      
+      // Calculate the length of the line
+      let distX = x1 - x2;
+      let distY = y1 - y2;
+      let len = sqrt(distX*distX + distY*distY);
+      
+      // Calculate dot product
+      let dot = ((cx - x1) * (x2 - x1) + (cy - y1) * (y2 - y1)) / (len * len);
+      
+      // Find the closest point on the line
+      let closestX = x1 + dot * (x2 - x1);
+      let closestY = y1 + dot * (y2 - y1);
+      
+      // Check if the closest point is on the line segment
+      if (!linePointCollision(x1, y1, x2, y2, closestX, closestY)) return false;
+      
+      // Get distance to closest point
+      distX = closestX - cx;
+      distY = closestY - cy;
+      let distance = sqrt(distX*distX + distY*distY);
+      
+      return distance <= r;
+    }
+    
+    function pointCircleCollision(px, py, cx, cy, r) {
+      let distX = px - cx;
+      let distY = py - cy;
+      let distance = sqrt(distX*distX + distY*distY);
+      
+      return distance <= r;
+    }
+    
+    function linePointCollision(x1, y1, x2, y2, px, py) {
+      // Calculate line length
+      let d1 = dist(px, py, x1, y1);
+      let d2 = dist(px, py, x2, y2);
+      let lineLen = dist(x1, y1, x2, y2);
+      
+      // Buffer for floating point errors
+      let buffer = 0.1;
+      
+      return d1 + d2 >= lineLen - buffer && d1 + d2 <= lineLen + buffer;
+    }
+    
+    function updateScore(newScore) {
+      score = newScore;
+      document.getElementById('score').innerText = `
